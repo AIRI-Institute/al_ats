@@ -1,0 +1,4 @@
+strategy: ddu
+kwargs:
+    use_activation: False
+    use_spectralnorm: True

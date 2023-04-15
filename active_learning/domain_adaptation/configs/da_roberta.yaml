@@ -1,0 +1,63 @@
+hydra_output_dir: './outputs'
+hydra:
+  run:
+    dir: ${hydra_output_dir}/${data.dataset_name}_${now:%Y-%m-%d}
+  sweep:
+    dir: ${hydra_output_dir}/${data.dataset_name}_${now:%Y-%m-%d}
+    subdir: ${hydra.job.num}
+
+data:
+    dataset_name: 'ag_news'
+    data_path: 'datasets'  # or path to data if it
+    text_column_name: 'text'
+    has_validation: False
+    val_size: 0.2
+
+train_data_file: /home/jovyan/active_learning/active_learning/domain_adaptation/train_${data.dataset_name}.txt
+eval_data_file: /home/jovyan/active_learning/active_learning/domain_adaptation/dev_${data.dataset_name}.txt
+
+output_dir: './roberta-ag'
+model_type: 'roberta'  # needed only for assertion
+line_by_line: True
+should_continue: False
+model_name_or_path: 'roberta-base'
+mlm: True
+mlm_probability: 0.15
+config_name: ${model_name_or_path}
+tokenizer_name: ${model_name_or_path}
+cache_dir: './models_cache/${model_name_or_path}'
+block_size: 512
+do_train: True
+do_eval: True
+evaluate_during_training: True
+per_gpu_train_batch_size: 10
+per_gpu_eval_batch_size: 10
+gradient_accumulation_steps: 8
+learning_rate: 1e-5
+weight_decay: 0.01
+adam_epsilon: 1e-6
+max_grad_norm: 1.0
+num_train_epochs: 1
+max_steps: 100000
+warmup_steps: 0
+logging_steps: 500
+save_steps: 500
+save_total_limit: 5
+save_best_val_model: True
+eval_all_checkpoints: False
+early_stopping: True
+early_stopping_tolerance: 10
+no_cuda: False
+n_gpu: 3
+eval_n_gpu: 1
+val_size: ${data.val_size}
+gpus: [0, 1, 2]
+overwrite_output_dir: True
+overwrite_cache: True
+seed: 42
+fp16: False
+fp16_opt_level: 'O1'
+local_rank: -1
+server_ip: ''
+server_port: ''
+

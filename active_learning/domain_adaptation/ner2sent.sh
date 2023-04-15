@@ -1,0 +1,1 @@
+python3 ./ner_to_sent.py --input_file ../../data/conll2003/train.txt --save_path ./train.txt

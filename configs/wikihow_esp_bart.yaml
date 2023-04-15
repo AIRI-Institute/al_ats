@@ -1,0 +1,16 @@
+cuda_devices: [0,1]
+task_names: ''
+hydra:
+  run:
+    dir: ./workdir/logs/${now:%Y-%m-%d}/${now:%H-%M-%S}
+    
+tasks:
+    - 
+        name: 'bart-base'
+        config_path: '../configs'
+        config_name: 'al_abssum'
+        command: '../../../active_learning/active_learning/run_active_learning.py'
+        environ: ''
+        args: 'data.dataset_name=abssum_wikihow_all data.path=/home/user/active_learning/data data.text_name=text data.label_name=headline +data.test_size_split=1000 acquisition_model.name=facebook/bart-base acquisition_model.training.batch_size_args.eval_batch_size=70 +al.strategy_kwargs.aggregation=mean al.gamma_or_k_confident_to_save=1000 +acquisition_model.training.batch_size_args.generate_batch_size=15 al.strategy=seq_score_stochastic al.init_p_or_n=10 al.step_p_or_n=10'
+        seeds: [4837, 23419, 705525, 10671619, 1084218, 42, 123, 12345, 9876543]
+        n_repeats: 1

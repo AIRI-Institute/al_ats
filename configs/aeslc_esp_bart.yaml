@@ -1,0 +1,16 @@
+cuda_devices: [0,1,2]
+task_names: ''
+hydra:
+  run:
+    dir: ./workdir/logs/${now:%Y-%m-%d}/${now:%H-%M-%S}
+    
+tasks:
+    - 
+        name: 'bart-base'
+        config_path: '../configs'
+        config_name: 'al_abssum'
+        command: '../../../active_learning/active_learning/run_active_learning.py'
+        environ: ''
+        args: 'data.dataset_name=aeslc data.text_name=email_body data.label_name=subject_line acquisition_model.name=facebook/bart-base al.strategy=seq_score_stochastic +al.strategy_kwargs.aggregation=mean al.init_p_or_n=10 al.step_p_or_n=10 al.sampling_type=null'
+        seeds: [4837, 23419, 705525, 10671619, 1084218, 42, 123, 12345, 9876543]
+        n_repeats: 1

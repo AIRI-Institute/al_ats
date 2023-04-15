@@ -1,0 +1,41 @@
+seed: 1
+type: ${task}
+name: 'facebook/bart-base'
+tokenizer_max_length: 1024
+num_labels:
+classifier_dropout: 0.
+exists_in_repo: True  # whether the model exists in HF models repo
+path_to_pretrained:  # required if the model does not exist in HF models repo
+training:
+    dev_size: 0.
+    shuffle_dev: False
+    freeze_embedder: False
+    batch_size_args:
+        batch_size: 16
+        eval_batch_size: 70
+        min_num_gradient_steps: 350
+        adjust_batch_size: True
+        adjust_num_epochs: True
+        min_batch_size: 4
+    trainer_args:
+        num_epochs: 6
+        patience: ${get_patience_value:${ensemble_model_3.training.dev_size}}
+        grad_clipping: 0.28
+        serialization_dir: ./output/${to_string:${ensemble_model_3.name}}_${ensemble_model_3.seed}_${now:%Y-%m-%d}_${now:%H-%M-%S}/ensemble_model_3
+        validation_metric: ${framework.validation_metric_abssum}
+        evaluation_strategy: 'no' # for transformers wrapper, 'epoch' or 'steps' or 'no'
+        eval_metrics: ["sacrebleu"]
+        fp16:
+            training: True
+            evaluation: False
+        accumulation:
+            gradient_accumulation_steps: 1
+            eval_accumulation_steps: 1
+        generation_max_length:  # if None, equals max len among summaries in the train sample
+        generation_num_beams:
+    optimizer_args:
+        weight_decay: 0.028
+        lr: 2e-5
+    scheduler_args:
+        warmup_steps_factor: 0.1
+        use_adafactor: False

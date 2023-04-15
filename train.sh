@@ -1,0 +1,1 @@
+HYDRA_CONFIG_PATH=./configs HYDRA_CONFIG_NAME=aescl_idds_bart python '../../../active_learning/active_learning/run_tasks_on_multiple_gpus.py'

@@ -1,0 +1,53 @@
+output_dir: './workdir/run_active_learning'
+hydra:
+  run:
+    dir: ${output_dir}/${now:%Y-%m-%d}/${now:%H-%M-%S}_${seed}
+  sweep:
+    dir: ${output_dir}/${now:%Y-%m-%d}/${now:%H-%M-%S}_${seed}
+    subdir: ${hydra.job.num}
+
+seed: 42
+cuda_device: 0
+cache_dir: './workdir/cache'
+dump_path: './workdir/model_weights'
+
+data:
+    dataset_name: 'jnlpba'
+    path: '/notebook/active_learning_nlp/data/'
+    tag_index: 0
+
+data_transfer:
+
+domain_adaptation:
+    cased: True
+    max_steps: 1000
+    target_vocab_size: 64000
+    train_data_percent: 1.0
+    name: 'test'
+    model_save_dir: '/notebook/active_learning_nlp/src/workdir/adapted_model'
+
+acquisition_model:
+    type: 'ner'
+    name: 'bert-base-cased'
+    tokenizer_max_length:
+    loss: 'cross-entropy'
+    training:
+        dev_size: 0.
+        freeze_embedder: False
+        batch_size_args:
+            batch_size: 16
+            eval_batch_size: 100
+            min_num_gradient_steps: 250
+            adjust_batch_size: True
+        trainer_args:
+            num_epochs: 5
+            patience: 3
+            grad_clipping: 1.
+            serialization_dir:
+        optimizer_args:
+            weight_decay: 0.01
+            lr: 5e-5
+        scheduler_args:
+            warmup_steps_factor: 0.1
+
+successor_model:

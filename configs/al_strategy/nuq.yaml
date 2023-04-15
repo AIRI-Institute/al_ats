@@ -1,0 +1,4 @@
+strategy: nuq
+kwargs:
+    use_activation: False
+    use_spectralnorm: True

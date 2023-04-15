@@ -1,0 +1,132 @@
+output_dir: './workdir/run_active_learning'
+hydra:
+  run:
+    dir: ${output_dir}/${now:%Y-%m-%d}/${now:%H-%M-%S}_${seed}_${to_string:${acquisition_model.name}}
+  sweep:
+    dir: ${output_dir}/${now:%Y-%m-%d}/${now:%H-%M-%S}_${seed}_${to_string:${acquisition_model.name}}
+    subdir: ${hydra.job.num}
+
+seed: 42
+cuda_device: 0
+cache_dir: ./${output_dir}/cache_${seed}_${to_string:${acquisition_model.name}}
+cache_model_and_dataset: False
+framework: ???
+task: 'abs-sum'
+offline_mode: False
+
+data:
+    dataset_name: 'aeslc'
+    text_name: 'email_body'
+    label_name: 'subject_line'
+    labels_to_remove:
+    path: 'datasets'
+    train_size_split: 0.9
+
+acquisition_model:
+    type: ${task}
+    name: 'google/pegasus-large'
+    tokenizer_max_length: 1024
+    num_labels:
+    classifier_dropout: 0.
+    exists_in_repo: True  # whether the model exists in HF models repo
+    path_to_pretrained:  # required if the model does not exist in HF models repo
+    training:
+        dev_size: 0.
+        shuffle_dev: False
+        freeze_embedder: False
+        batch_size_args:
+            batch_size: 1
+            eval_batch_size: 10
+            generate_batch_size: 8
+            min_num_gradient_steps: 200
+            adjust_batch_size: True
+            adjust_num_epochs: True
+            min_batch_size: 2
+        trainer_args:
+            num_epochs: 4
+            patience: ${get_patience_value:${acquisition_model.training.dev_size}}
+            grad_clipping: 0.3
+            serialization_dir: ./output/${to_string:${acquisition_model.name}}_${seed}_${now:%Y-%m-%d}_${now:%H-%M-%S}/acquisition
+            validation_metric: ${framework.validation_metric_abssum}
+            evaluation_strategy: 'no' # for transformers wrapper, 'epoch' or 'steps' or 'no'
+            eval_metrics: ["sacrebleu"]
+            fp16:
+                training: True
+                evaluation: False
+            accumulation:
+                gradient_accumulation_steps: 8
+                eval_accumulation_steps: 1
+            generation_max_length:  # if None, equals max len among summaries in the train sample
+            generation_num_beams:
+        optimizer_args:
+            weight_decay: 0.03
+            lr: 5e-4
+        scheduler_args:
+            warmup_steps_factor: 0.1
+            use_adafactor: False
+
+successor_model:
+
+target_model:
+    type: ${task}
+    name: 'google/pegasus-large'
+    tokenizer_max_length: 1024
+    num_labels:
+    classifier_dropout: 0.
+    exists_in_repo: True  # whether the model exists in HF models repo
+    path_to_pretrained:  # required if the model does not exist in HF models repo
+    training:
+        dev_size: 0.
+        shuffle_dev: False
+        freeze_embedder: False
+        batch_size_args:
+            batch_size: 1
+            eval_batch_size: 10
+            min_num_gradient_steps: 200
+            adjust_batch_size: True
+            adjust_num_epochs: True
+            min_batch_size: 2
+        trainer_args:
+            num_epochs: 4
+            label_smoothing_factor: 0.0
+            patience: ${get_patience_value:${acquisition_model.training.dev_size}}
+            grad_clipping: 0.3
+            serialization_dir: ./output/${to_string:${acquisition_model.name}}_${seed}_${now:%Y-%m-%d}_${now:%H-%M-%S}/acquisition
+            validation_metric: ${framework.validation_metric_abssum}
+            evaluation_strategy: 'no' # for transformers wrapper, 'epoch' or 'steps' or 'no'
+            eval_metrics: ["sacrebleu"]
+            fp16:
+                training: True
+                evaluation: False
+            accumulation:
+                gradient_accumulation_steps: 8
+                eval_accumulation_steps: 1
+            generation_max_length:  # if None, equals max len among summaries in the train sample
+            generation_num_beams:
+        optimizer_args:
+            weight_decay: 0.03
+            lr: 5e-4
+        scheduler_args:
+            warmup_steps_factor: 0.1
+            use_adafactor: False
+
+
+al:
+    strategy: 'seq_score'
+    num_queries: 15
+    init_p_or_n: 10
+    step_p_or_n: 10
+    gamma_or_k_confident_to_save: 1000
+    T: 0.
+    sampling_type: random
+    iters_to_recalc_scores: "no"
+    evaluate_query: True
+    strategy_kwargs:
+        enable_dropout: True
+
+tracin:
+    use: False
+
+defaults:
+  - framework: transformers # 'allennlp' or 'transformers'
+#  - al_strategy: lc # lc, random, mahalanobis, nuq, ddu, logits_lc

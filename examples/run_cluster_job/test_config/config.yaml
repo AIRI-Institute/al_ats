@@ -1,0 +1,16 @@
+cuda_devices: [0,1]
+task_names: ''
+hydra:
+  run:
+    dir: ./workdir/logs/${now:%Y-%m-%d}/${now:%H-%M-%S}
+    
+tasks:
+    - 
+        name: 'client_lib_test'
+        config_path: '/home/jovyan/active_learning/configs'
+        config_name: 'al_cls'
+        command: '/home/jovyan/active_learning/active_learning/run_active_learning.py'
+        environ: ''
+        args: 'al.num_queries=1 offline_mode=True cache_model_and_dataset=True cache_dir=/home/jovyan/workdir/cache/test_data'
+        seeds: [42,52]
+        n_repeats: 1

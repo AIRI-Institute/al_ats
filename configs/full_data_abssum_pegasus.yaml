@@ -1,0 +1,76 @@
+output_dir: './workdir/run_active_learning'
+hydra:
+  run:
+    dir: ${output_dir}/${now:%Y-%m-%d}/${now:%H-%M-%S}_${seed}_${to_string:${model.name}}
+  sweep:
+    dir: ${output_dir}/${now:%Y-%m-%d}/${now:%H-%M-%S}_${seed}_${to_string:${model.name}}
+    subdir: ${hydra.job.num}
+
+seed: 42
+cuda_device: 0
+cache_dir: ./${output_dir}/cache_${seed}_${to_string:${model.name}}
+cache_model_and_dataset: False
+framework: ???
+task: 'abs-sum'
+offline_mode: False
+dump_model: True
+
+data:
+    dataset_name: 'xsum'
+    text_name: 'document'
+    label_name: 'summary'
+    labels_to_remove:
+    path: 'datasets'
+    train_size_split: 0.9
+    filter_quantiles:
+    tokenizer_name: ${model.name}
+
+model:
+    type: ${task}
+    name: 'google/pegasus-large'
+    tokenizer_max_length: 1024
+    num_labels:
+    classifier_dropout: 0.
+    exists_in_repo: True  # whether the model exists in HF models repo
+    path_to_pretrained:  # required if the model does not exist in HF models repo
+    training:
+        dev_size: 0.
+        shuffle_dev: False
+        freeze_embedder: False
+        batch_size_args:
+            batch_size: 2
+            eval_batch_size: 10
+            min_num_gradient_steps: 2000
+            adjust_batch_size: False
+            adjust_num_epochs: False
+            min_batch_size: 2
+        trainer_args:
+            num_epochs: 20
+            max_steps: 256000
+            patience: 5
+            grad_clipping: 0.3
+            serialization_dir: ./output/${to_string:${model.name}}_${seed}_${now:%Y-%m-%d}_${now:%H-%M-%S}/model
+            validation_metric: ${framework.validation_metric_abssum}
+            evaluation_strategy: 'steps' # for transformers wrapper, 'epoch' or 'steps' or 'no'
+            load_best_at_end: True
+            label_smoothing_factor: 0.1
+            eval_metrics: ["sacrebleu"]
+            fp16:
+                training: True
+                evaluation: False
+            accumulation:
+              gradient_accumulation_steps: 128
+              eval_accumulation_steps: 1
+            generation_max_length:  # if None, equals max len among summaries in the train sample
+            generation_num_beams: 8
+        optimizer_args:
+            weight_decay: 0.03
+            lr: 2e-4
+        scheduler_args:
+            warmup_steps_factor: 0.1
+            use_adafactor: True
+        inference_args:
+            length_penalty: 1.
+
+defaults:
+  - framework: transformers

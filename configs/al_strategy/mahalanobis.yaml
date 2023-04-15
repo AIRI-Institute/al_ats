@@ -1,0 +1,6 @@
+strategy: mahalanobis
+kwargs:
+    use_da: False
+    use_v2: False
+    use_activation: False
+    use_spectralnorm: True

@@ -1,0 +1,139 @@
+import os
+import logging
+import hydra
+from pathlib import Path
+from datasets import load_dataset
+
+from transformers import DataCollatorForLanguageModeling, Trainer, TrainingArguments
+from transformers import AutoModelForMaskedLM, AutoTokenizer
+from transformers_domain_adaptation import DataSelector
+from transformers_domain_adaptation import VocabAugmentor
+
+from ..utils.data import load_data
+
+
+os.environ["CUDA_VISIBLE_DEVICES"] = "2, 3"
+log = logging.getLogger()
+
+
+def instance_to_text(instance):
+    return " ".join(instance.human_readable_dict()["tokens"]).strip()
+
+
+def get_texts(data):
+    texts = []
+    for dataset in data:
+        buf_text = []
+        for instance in dataset:
+            buf_text.append(instance_to_text(instance))
+        texts.append(buf_text)
+    return texts
+
+
+def domain_adaptation(unlabeled_data, dev_instances, config):
+    # print(initial_data, unlabeled_data, dev_instances)
+    # extract sentences from data
+    unlabeled_texts, dev_texts = get_texts((unlabeled_data, dev_instances))
+    # load model and tokenizer
+    log.info("Loading model and tokenizer.")
+    device = f"cuda:{config.cuda_device}" if config.cuda_device >= 0 else "cpu"
+    model_card = config.acquisition_model.name
+    model = AutoModelForMaskedLM.from_pretrained(
+        model_card, cache_dir=config.cache_dir
+    ).to(device)
+    tokenizer = AutoTokenizer.from_pretrained(model_card, cache_dir=config.cache_dir)
+    log.info("Selecting data for training.")
+    # make a selector for choosing data for MLM training
+    selector = DataSelector(
+        keep=config.domain_adaptation.train_data_percent,  # TODO Replace with `keep`
+        tokenizer=tokenizer,
+        similarity_metrics=["euclidean"],
+        diversity_metrics=["type_token_ratio", "entropy",],
+    )
+    selector.fit(unlabeled_texts)
+    # Select relevant documents from in-domain training corpus
+    selected_corpus = selector.transform(unlabeled_texts)
+    # get a new tokens and add them to tokenizer
+    prev_vocab = len(tokenizer)
+    target_vocab_size = config.domain_adaptation.target_vocab_size
+    augmentor = VocabAugmentor(
+        tokenizer=tokenizer,
+        cased=config.domain_adaptation.cased,
+        target_vocab_size=target_vocab_size,
+    )
+    new_tokens = augmentor.get_new_tokens(unlabeled_texts)
+    tokenizer.add_tokens(new_tokens)
+    model.resize_token_embeddings(len(tokenizer))
+    log.info(f"Extended vocab from {prev_vocab} to {len(tokenizer)}.")
+    log.info(f"Selected for training {len(selected_corpus)} texts.")
+    # save data for dataset
+    Path(f"{config.cache_dir}/selected_corpus").write_text("\n".join(selected_corpus))
+    Path(f"{config.cache_dir}/dev_dataset").write_text("\n".join(dev_texts))
+    # make dataset
+    log.info("Creating dataset.")
+    datasets = load_dataset(
+        "text",
+        data_files={
+            "train": f"{config.cache_dir}/selected_corpus",
+            "val": f"{config.cache_dir}/dev_dataset",
+        },
+    )
+    tokenized_datasets = datasets.map(
+        lambda examples: tokenizer(
+            examples["text"],
+            truncation=True,
+            max_length=model.config.max_position_embeddings,
+        ),
+        batched=True,
+    )
+    data_collator = DataCollatorForLanguageModeling(
+        tokenizer=tokenizer, mlm=True, mlm_probability=0.15
+    )
+    # prepare model for training
+    training_args = TrainingArguments(
+        output_dir=f"{config.cache_dir}/results/domain_pre_training",
+        overwrite_output_dir=True,
+        max_steps=config.domain_adaptation.max_steps,
+        per_device_train_batch_size=8,
+        per_device_eval_batch_size=8,
+        evaluation_strategy="steps",
+        save_steps=50,
+        save_total_limit=2,
+        logging_steps=50,
+        seed=config.seed,
+        gradient_accumulation_steps=4,
+        # fp16=True,
+        dataloader_num_workers=0,
+        disable_tqdm=False,
+    )
+    trainer = Trainer(
+        model=model,
+        args=training_args,
+        train_dataset=tokenized_datasets["train"],
+        eval_dataset=tokenized_datasets["val"],
+        data_collator=data_collator,
+        tokenizer=tokenizer,  # This tokenizer has new tokens
+    )
+    log.info("Start domain adaptation.")
+    # train model
+    trainer.train()
+    trainer.save_model(config.domain_adaptation.model_save_dir)
+
+
+@hydra.main(config_name="./configs/train.yaml")
+def main(config):
+    # set_global_seed(config.seed)
+    log.info("Loading data...")
+    cache_dir = config.cache_dir if config.cache_model_and_dataset else None
+    train_instances, dev_instances, test_instances, labels = load_data(
+        config.data, config.acquisition_model.type, cache_dir=cache_dir
+    )
+    log.info(
+        f"Training size: {len(train_instances)}, test size: {len(test_instances)}, dev size: {len(dev_instances)}"
+    )
+    log.info("Done.")
+    domain_adaptation(train_instances, dev_instances, config)
+
+
+if __name__ == "__main__":
+    main()
