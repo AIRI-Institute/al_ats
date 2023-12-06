@@ -5,7 +5,6 @@ active_learning/.ipynb_checkpoints
 active_learning/utils/packages
 module/
 .idea/
-data/
 active_learning/.DS_Store
 .DS_Store
 .eggs
